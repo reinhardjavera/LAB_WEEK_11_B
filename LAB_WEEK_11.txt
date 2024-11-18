@@ -1,0 +1,99 @@
+1. The part of the code that handles storing the picture in a path based on the given URI is in the ProviderFileManager class, specifically in the insertImageToStore method and the insertToStore method.
+
+fun insertImageToStore(fileInfo: FileInfo?) {
+    fileInfo?.let {
+        insertToStore(
+            fileInfo,
+            mediaContentHelper.getImageContentUri(),
+            mediaContentHelper.generateImageContentValues(it)
+        )
+    }
+}
+
+private fun insertToStore(fileInfo: FileInfo, contentUri: Uri, contentValues: ContentValues) {
+    executor.execute {
+        val insertedUri = contentResolver.insert(contentUri, contentValues)
+        insertedUri?.let {
+            val inputStream = contentResolver.openInputStream(fileInfo.uri)
+            val outputStream = contentResolver.openOutputStream(insertedUri)
+            IOUtils.copy(inputStream, outputStream)
+        }
+    }
+}
+
+2. In FileInfo.kt, the first attribute uri refers to the URI of the file, which is used to access the file within the app or by other apps. The fourth attribute relativePath refers to the path relative to the external storage directory where the file is stored. This path is used to organize files within specific folders in the external storage.
+
+- Brief example: 
+
+ata class FileInfo(
+    val uri: Uri, // URI of the file
+    val file: File, // File object
+    val name: String, // Name of the file
+    val relativePath: String, // Relative path in the external storage
+    val mimeType: String // MIME type of the file
+)
+
+3. [Bonus]
+
+1) User Interaction: The user clicks the button to take a picture.  
+findViewById<Button>(R.id.photo_button).setOnClickListener {
+    isCapturingVideo = false
+    checkPermissions { openImageCapture() }
+}
+
+2) Permission Check: The app checks if the necessary permissions (camera and storage) are granted.  
+private fun checkPermissions(onPermissionGranted: () -> Unit) {
+    val permissions = mutableListOf<String>()
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+        permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    }
+    permissions.add(Manifest.permission.CAMERA)
+    val missingPermissions = permissions.filter {
+        ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+    }
+    if (missingPermissions.isEmpty()) {
+        onPermissionGranted()
+    } else {
+        ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), REQUEST_EXTERNAL_STORAGE)
+    }
+}
+
+3) Open Camera: If permissions are granted, the app generates a URI for the photo and launches the camera.  
+private fun openImageCapture() {
+    photoInfo = providerFileManager.generatePhotoUri(System.currentTimeMillis())
+    photoInfo?.uri?.let { takePictureLauncher.launch(it) }
+        ?: showToast("Failed to generate photo URI.")
+}
+
+4) Capture Image: The user captures the image, and the result is handled by the ActivityResultLauncher.  
+takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) {
+    if (it) {
+        providerFileManager.insertImageToStore(photoInfo)
+        showToast("Photo captured successfully!")
+    } else {
+        showToast("Failed to capture photo.")
+    }
+}
+
+5) Store Image: The captured image is stored in the MediaStore using the ProviderFileManager.
+fun insertImageToStore(fileInfo: FileInfo?) {
+    fileInfo?.let {
+        insertToStore(
+            fileInfo,
+            mediaContentHelper.getImageContentUri(),
+            mediaContentHelper.generateImageContentValues(it)
+        )
+    }
+}
+
+private fun insertToStore(fileInfo: FileInfo, contentUri: Uri, contentValues: ContentValues) {
+    executor.execute {
+        val insertedUri = contentResolver.insert(contentUri, contentValues)
+        insertedUri?.let {
+            val inputStream = contentResolver.openInputStream(fileInfo.uri)
+            val outputStream = contentResolver.openOutputStream(insertedUri)
+            IOUtils.copy(inputStream, outputStream)
+        }
+    }
+}
+
